@@ -1,0 +1,342 @@
+"""大语言模型接口，支持 OpenAI 和 LiteLLM"""
+
+import json
+import time
+from dataclasses import dataclass, field
+
+from openai import OpenAI, APIError, BadRequestError, RateLimitError, APITimeoutError, APIConnectionError
+
+
+# 工具调用的结构体
+@dataclass
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict
+
+
+# LLM响应的结构体
+@dataclass
+class LLMResponse:
+    content: str = ""
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    # 修饰器，让访问函数像访问方法一样无需括号
+    @property
+    def message(self) -> dict:
+        """返回一个字典，包含角色、内容和工具调用信息，适用于消息传递接口。"""
+
+        msg: dict = {"role": "assistant", "content": self.content or None}
+        if self.tool_calls:
+            msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": json.dumps(tc.arguments),
+                    },
+                }
+                for tc in self.tool_calls
+            ]
+        return msg
+
+
+# 价格表，单位为美元/百万tokens
+_PRICING = {
+    # OpenAI - current flagships
+    "gpt-5.5": (5, 30),
+    "gpt-5.4": (2.5, 15),
+    "gpt-5.4-mini": (0.75, 4.5),
+    "gpt-5.4-nano": (0.2, 1.25),
+    "o4-mini": (1.1, 4.4),
+    # OpenAI - previous gen (still widely used)
+    "gpt-4.1": (2, 8),
+    "gpt-4.1-mini": (0.4, 1.6),
+    "gpt-4.1-nano": (0.1, 0.4),
+    "gpt-4o": (2.5, 10),
+    "gpt-4o-mini": (0.15, 0.6),
+    # DeepSeek
+    "deepseek-chat": (0.27, 1.10),
+    "deepseek-reasoner": (0.55, 2.19),
+    # Anthropic Claude
+    "claude-opus-4-6": (5, 25),
+    "claude-sonnet-4-6": (3, 15),
+    "claude-haiku-4-5": (1, 5),
+    # Alibaba Qwen
+    "qwen3-max": (0.78, 3.9),
+    "qwen3-plus": (0.26, 0.78),
+    "qwen-max": (0.78, 3.9),
+    # Moonshot Kimi
+    "kimi-k2.5": (0.6, 3),
+}
+
+
+class LLM:
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str | None = None,
+        **kwargs,
+    ):
+        self.model = model  # LLM模型
+        self.client = OpenAI(api_key=api_key, base_url=base_url)  # OpenAI客户端
+        self.extra = kwargs  # 额外参数
+        self.total_prompt_tokens = 0  # 提示词tokens数
+        self.total_completion_tokens = 0  # 完成tokens数
+
+    @property
+    def estimated_cost(self) -> float | None:
+        """根据Token数量和价格表，估算当前会话的成本"""
+        pricing = _PRICING.get(self.model)
+        if not pricing:
+            return None
+        input_rate, output_rate = pricing
+        return (
+            self.total_prompt_tokens * input_rate / 1_000_000
+            + self.total_completion_tokens * output_rate / 1_000_000
+        )
+
+    def chat(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        on_token=None,
+    ) -> LLMResponse:
+        """发送消息，流式返回响应，处理工具调用."""
+
+        params: dict = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            **self.extra,
+        }
+        if tools:
+            params["tools"] = tools
+
+        # 请求在最后一个块中包含使用情况统计信息；如果提供程序不支持它，OpenAI会返回400错误，因此我们在捕获异常时删除该参数
+        params["stream_options"] = {"include_usage": True}
+        try:
+            stream = self._call_with_retry(params)
+        except BadRequestError:
+            params.pop("stream_options", None)
+            stream = self._call_with_retry(params)
+
+        content_parts: list[str] = []  # 累积响应内容的列表
+        tc_map: dict[int, dict] = {}  # 索引到工具调用的映射
+        prompt_tok = 0  # 累积提示词tokens数
+        completion_tok = 0  # 累积完成tokens数
+
+        for chunk in stream:
+            # 在最后一个块中获取使用情况统计信息；某些提供程序会发送带有空字段的使用情况
+            # 因此将其强制为0，以便下面的运行总数不会在int + None时出错
+            if chunk.usage:
+                prompt_tok = chunk.usage.prompt_tokens or 0
+                completion_tok = chunk.usage.completion_tokens or 0
+
+            # 如果没有choices字段，则跳过该块
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+
+            # 累计响应内容，并在每个token到达时调用on_token回调
+            if delta.content:
+                content_parts.append(delta.content)
+                if on_token:
+                    on_token(delta.content)
+
+            # 累计工具调用
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+
+                    # 获取工具调用的索引，如果索引不存在于tc_map中，则初始化一个空的工具调用字典
+                    idx = tc_delta.index
+                    if idx not in tc_map:
+                        tc_map[idx] = {"id": "", "name": "", "args": ""}
+
+                    # 更新工具调用字典中的id、name和args字段
+                    if tc_delta.id:
+                        tc_map[idx]["id"] = tc_delta.id
+                    
+                    # 如果工具调用中包含function字段，则更新name和args字段
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            tc_map[idx]["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            # 累积工具调用的参数字符串，所以用“+=”而不是“=”，以便在多个块中接收参数时不会丢失数据
+                            tc_map[idx]["args"] += tc_delta.function.arguments
+
+        # 将tc_map中的工具调用字典解析为ToolCall对象列表
+        parsed: list[ToolCall] = []
+        for idx in sorted(tc_map):
+            raw = tc_map[idx]
+            try:
+                # 判断args是否为有效的JSON字符串，如果不是，则将args设置为空字典
+                args = json.loads(raw["args"])
+            except (json.JSONDecodeError, KeyError):
+                args = {}
+            parsed.append(ToolCall(id=raw["id"], name=raw["name"], arguments=args))
+
+        # 累积总的提示词tokens数和完成tokens数
+        self.total_prompt_tokens += prompt_tok
+        self.total_completion_tokens += completion_tok
+
+        return LLMResponse(
+            content="".join(content_parts),
+            tool_calls=parsed,
+            prompt_tokens=prompt_tok,
+            completion_tokens=completion_tok,
+        )
+
+    # 带有重试机制的调用方法，处理瞬时错误并使用指数退避策略
+    def _call_with_retry(self, params: dict, max_retries: int = 3):
+        """Retry on transient errors with exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                # 调用OpenAI的chat.completions.create方法发送请求
+                return self.client.chat.completions.create(**params)
+            except (RateLimitError, APITimeoutError, APIConnectionError):
+                # 对于瞬时错误，使用指数退避策略进行重试
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt
+                time.sleep(wait)
+            except APIError as e:
+                # 对于服务器错误（5xx），也使用指数退避策略进行重试，其他错误则直接抛出异常
+                status_code = getattr(e, "status_code", None)
+                if status_code and status_code >= 500 and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                else:
+                    raise
+
+
+
+# 不兼容OpenAI的LLM后端，使用LiteLLM支持100多个提供商
+class LiteLLM(LLM):
+    """LLM backend via LiteLLM, supporting 100+ providers.
+
+    Use this when your target provider is NOT OpenAI-compatible
+    (AWS Bedrock, Google Vertex, Cohere, etc.) or when you want
+    a single interface to switch between any provider by changing
+    the model string.
+
+    Set CORECODER_PROVIDER=litellm and use LiteLLM model strings
+    like ``anthropic/claude-3-haiku``, ``bedrock/anthropic.claude-v2``,
+    ``vertex_ai/gemini-pro``, etc.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        **kwargs,
+    ):
+        # skip LLM.__init__ which creates an OpenAI client
+        self.model = model
+        self.api_key = api_key
+        self.base_url = base_url
+        self.extra = kwargs
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+
+    def chat(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        on_token=None,
+    ) -> LLMResponse:
+        """Send messages via litellm, stream back response, handle tool calls."""
+        params: dict = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            **self.extra,
+        }
+        if tools:
+            params["tools"] = tools
+
+        # ask for usage stats in the final chunk; litellm drops this for providers
+        # that don't support it (drop_params), so it's safe to always request
+        params["stream_options"] = {"include_usage": True}
+        stream = self._call_with_retry(params)
+
+        content_parts: list[str] = []
+        tc_map: dict[int, dict] = {}
+        prompt_tok = 0
+        completion_tok = 0
+
+        for chunk in stream:
+            usage = getattr(chunk, "usage", None)
+            if usage:
+                prompt_tok = getattr(usage, "prompt_tokens", 0) or 0
+                completion_tok = getattr(usage, "completion_tokens", 0) or 0
+
+            if not getattr(chunk, "choices", None):
+                continue
+            delta = chunk.choices[0].delta
+
+            if getattr(delta, "content", None):
+                content_parts.append(delta.content)
+                if on_token:
+                    on_token(delta.content)
+
+            if getattr(delta, "tool_calls", None):
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tc_map:
+                        tc_map[idx] = {"id": "", "name": "", "args": ""}
+                    if tc_delta.id:
+                        tc_map[idx]["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            tc_map[idx]["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            tc_map[idx]["args"] += tc_delta.function.arguments
+
+        parsed: list[ToolCall] = []
+        for idx in sorted(tc_map):
+            raw = tc_map[idx]
+            try:
+                args = json.loads(raw["args"])
+            except (json.JSONDecodeError, KeyError):
+                args = {}
+            parsed.append(ToolCall(id=raw["id"], name=raw["name"], arguments=args))
+
+        self.total_prompt_tokens += prompt_tok
+        self.total_completion_tokens += completion_tok
+
+        return LLMResponse(
+            content="".join(content_parts),
+            tool_calls=parsed,
+            prompt_tokens=prompt_tok,
+            completion_tokens=completion_tok,
+        )
+
+    def _call_with_retry(self, params: dict, max_retries: int = 3):
+        """Retry on transient errors with exponential backoff via litellm."""
+        import litellm
+
+        params["drop_params"] = True
+        if self.api_key:
+            params["api_key"] = self.api_key
+        if self.base_url:
+            params["api_base"] = self.base_url
+
+        for attempt in range(max_retries):
+            try:
+                return litellm.completion(**params)
+            except Exception as e:
+                err = str(e).lower()
+                is_transient = any(
+                    kw in err
+                    for kw in ["rate_limit", "timeout", "connection", "502", "503", "529"]
+                )
+                is_server = any(kw in err for kw in ["500", "502", "503", "504"])
+                if (is_transient or is_server) and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                else:
+                    raise
