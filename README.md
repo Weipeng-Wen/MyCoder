@@ -1,10 +1,10 @@
-<div align="center">
+﻿<div align="center">
 
 # 🚀 CoreCoder
 
 <p>
-  <strong>一个极简、可读、可改造的 AI Coding Agent</strong><br>
-  <span style="color:#2563eb">用约千行 Python 展示“模型 + 工具 + 上下文 + 会话”的完整 Agent 工作流</span>
+  <strong>我的极简 AI 编程 Agent 小实验</strong><br>
+  <span style="color:#2563eb">把一个 coding agent 拆开看看：它到底是怎么读代码、调工具、改文件、继续对话的。</span>
 </p>
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
@@ -16,70 +16,74 @@
 
 ---
 
-## ✨ 项目简介
+## 🧡 这个项目是干嘛的
 
-CoreCoder 是一个面向终端的轻量级 AI 编程助手。它把一个 coding agent 的核心机制拆成清晰的几个部分：
+这是我自己改的一个私人项目，主要用来学习和折腾 AI Coding Agent。
 
-| 模块 | 关键词 | 说明 |
-|---|---|---|
-| 🧠 Agent 主循环 | <span style="color:#7c3aed">规划与执行</span> | 模型决定下一步，是直接回答还是调用工具 |
-| 🧰 Tools 工具层 | <span style="color:#059669">真实动手能力</span> | 读文件、写文件、编辑文件、搜索、执行命令、派生子 Agent |
-| 🪟 Context 上下文 | <span style="color:#2563eb">长期任务续航</span> | 对长对话和大输出进行分层压缩 |
-| 💬 CLI 交互层 | <span style="color:#dc2626">终端体验</span> | 支持 REPL、一次性 prompt、斜杠命令、会话恢复 |
-| 🔌 LLM 适配层 | <span style="color:#ea580c">模型可替换</span> | 支持 OpenAI 兼容接口，也可通过 LiteLLM 接入更多模型 |
+它不是那种包装得很满的“正式产品”，更像是一个能跑起来的源码笔记。我想看清楚一个编程 Agent 最核心的几件事：
 
-它的价值不只是“能用”，更在于“能读懂”：代码规模小、模块边界清晰，非常适合学习和二次开发自己的 Agent。
+| 我关心的问题 | CoreCoder 里对应的部分 |
+|---|---|
+| 🧠 模型怎么决定下一步？ | `agent.py` 里的主循环 |
+| 🧰 模型怎么真正动手？ | `tools/` 里的各种工具 |
+| 📚 对话太长怎么办？ | `context.py` 的上下文压缩 |
+| 💬 怎么在终端里聊天？ | `cli.py` 的 REPL |
+| 🔌 怎么换不同模型？ | `llm.py` 和 `config.py` |
+| 💾 怎么保存一次任务？ | `session.py` |
+
+简单说：  
+<span style="color:#7c3aed"><strong>CoreCoder = LLM + 工具调用 + 上下文管理 + 终端交互。</strong></span>
 
 ---
 
-## 🧭 目录结构
+## 🧭 文件夹大概长这样
 
 ```text
 corecoder/
-├── agent.py              # Agent 主循环：模型调用、工具执行、上下文压缩
-├── cli.py                # 命令行入口：REPL、斜杠命令、一次性模式
-├── config.py             # 环境变量与 .env 配置加载
-├── context.py            # 多层上下文压缩策略
-├── llm.py                # OpenAI / LiteLLM 模型接口、流式输出、成本统计
-├── prompt.py             # 系统提示词生成
-├── session.py            # 会话保存、恢复、列表管理
+├── agent.py              # Agent 主循环
+├── cli.py                # 终端交互入口
+├── config.py             # 配置读取
+├── context.py            # 上下文压缩
+├── llm.py                # 模型接口
+├── prompt.py             # 系统提示词
+├── session.py            # 会话保存/恢复
 ├── __init__.py           # 包导出
 ├── __main__.py           # python -m corecoder 入口
 └── tools/
-    ├── __init__.py       # 工具注册表
-    ├── base.py           # 工具抽象基类
-    ├── bash.py           # Shell 命令执行工具
-    ├── read.py           # 文件读取工具
-    ├── write.py          # 文件写入工具
-    ├── edit.py           # 精准替换编辑工具
-    ├── glob_tool.py      # 文件路径匹配工具
-    ├── grep.py           # 文件内容搜索工具
-    ├── agent.py          # 子 Agent 工具
-    └── now_time.py       # 当前时间工具
+    ├── __init__.py       # 工具注册
+    ├── base.py           # 工具基类
+    ├── bash.py           # 执行命令
+    ├── read.py           # 读文件
+    ├── write.py          # 写文件
+    ├── edit.py           # 改文件
+    ├── glob_tool.py      # 找文件
+    ├── grep.py           # 搜内容
+    ├── agent.py          # 子 Agent
+    └── now_time.py       # 当前时间
 ```
 
-> `__pycache__/` 是 Python 自动生成的缓存目录，不属于核心源码设计。
+> `__pycache__/` 是 Python 自动生成的缓存，不用管。
 
 ---
 
-## ⚡ 快速开始
+## ⚡ 我怎么跑它
 
-### 1. 安装依赖
+### 1. 安装
 
 ```bash
 pip install -e .
 ```
 
-### 2. 配置模型
+### 2. 配置 API Key
 
-你可以通过 `.env` 或环境变量配置模型：
+可以放到 `.env`，也可以直接设置环境变量。
 
-| 场景 | 示例 |
+| 模型来源 | 配置示例 |
 |---|---|
 | OpenAI 兼容接口 | `OPENAI_API_KEY=sk-...` |
 | DeepSeek | `OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com CORECODER_MODEL=deepseek-chat` |
 | 本地 Ollama | `OPENAI_API_KEY=ollama OPENAI_BASE_URL=http://localhost:11434/v1 CORECODER_MODEL=qwen2.5-coder` |
-| LiteLLM 多厂商 | `CORECODER_PROVIDER=litellm CORECODER_MODEL=anthropic/claude-3-haiku` |
+| LiteLLM | `CORECODER_PROVIDER=litellm CORECODER_MODEL=anthropic/claude-3-haiku` |
 
 ### 3. 启动
 
@@ -87,197 +91,151 @@ pip install -e .
 corecoder
 ```
 
-或一次性执行：
+或者一次性问一句：
 
 ```bash
-corecoder -p "帮我检查这个项目的入口文件"
+corecoder -p "帮我看一下这个项目的入口在哪里"
 ```
 
 ---
 
-## 🧩 每个 Python 文件的作用
+## 🐍 每个 `.py` 文件是干嘛的
 
-### 📦 核心包文件
+### 核心文件
 
-| 文件 | 代码量 | 作用 | 关键设计 |
-|---|---:|---|---|
-| `corecoder/agent.py` | 129 行 | CoreCoder 的核心 Agent 主循环。接收用户输入，调用 LLM，根据模型返回决定是否执行工具，并把工具结果继续塞回对话。 | <span style="color:#7c3aed">支持单工具直接执行、多工具线程池并发执行、工具参数签名校验、KeyboardInterrupt 后补齐未完成 tool call。</span> |
-| `corecoder/cli.py` | 262 行 | 终端用户界面。负责参数解析、REPL 交互、流式输出、斜杠命令和一次性 prompt 模式。 | <span style="color:#2563eb">把 Rich 的展示能力和 prompt_toolkit 的多行输入、历史记录、快捷键结合起来，形成轻量但完整的终端体验。</span> |
-| `corecoder/config.py` | 52 行 | 配置中心。从 `.env` 和环境变量读取模型、API Key、base URL、token 限制、provider 等配置。 | <span style="color:#059669">自动向上查找 `.env`，并兼容 `CORECODER_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY` 等常见变量。</span> |
-| `corecoder/context.py` | 191 行 | 上下文管理器。估算 token，并在对话变长时执行分层压缩。 | <span style="color:#dc2626">三层压缩策略：工具输出裁剪、LLM 总结旧对话、硬折叠保留摘要与最近消息。</span> |
-| `corecoder/llm.py` | 296 行 | LLM 适配层。封装 OpenAI 兼容接口和 LiteLLM 接口，处理流式 token、工具调用增量解析、重试、用量统计和成本估算。 | <span style="color:#ea580c">统一 OpenAI 与 LiteLLM 的响应结构，让 Agent 层无需关心具体模型提供商。</span> |
-| `corecoder/prompt.py` | 26 行 | 系统提示词生成器。动态注入工作目录、系统信息、Python 版本和当前工具列表。 | <span style="color:#9333ea">提示词不是静态文本，而是根据运行环境和工具注册表生成。</span> |
-| `corecoder/session.py` | 96 行 | 会话持久化。支持保存、加载、列举历史会话。 | <span style="color:#0891b2">对 session id 做规范化和路径归属检查，防止路径穿越。</span> |
-| `corecoder/__init__.py` | 7 行 | 包级导出。暴露 `Agent`、`LLM`、`Config`、`ALL_TOOLS` 和版本号。 | <span style="color:#16a34a">让外部代码可以直接 `from corecoder import Agent` 使用核心能力。</span> |
-| `corecoder/__main__.py` | 2 行 | 模块运行入口。支持 `python -m corecoder` 启动 CLI。 | <span style="color:#475569">把包执行行为统一转发到 `corecoder.cli:main`。</span> |
+| 文件 | 作用 | 我觉得值得看的点 |
+|---|---|---|
+| `corecoder/agent.py` | 整个 Agent 的大脑。用户输入进来后，它负责问模型、执行工具、把工具结果继续交给模型。 | <span style="color:#7c3aed">主循环很直观：LLM 返回工具调用就执行，没有工具调用就结束回答。</span> |
+| `corecoder/cli.py` | 命令行界面。包括交互式聊天、一次性 prompt、帮助命令、保存会话、查看 token 等。 | <span style="color:#2563eb">这个文件能看到一个终端 Agent 怎么从“能跑”变成“能用”。</span> |
+| `corecoder/config.py` | 从环境变量和 `.env` 里读配置，比如模型名、API Key、base URL、上下文大小等。 | <span style="color:#059669">兼容几种常见 API Key 名称，换模型比较方便。</span> |
+| `corecoder/context.py` | 管理上下文长度。对话太长、工具输出太多时，它会做压缩。 | <span style="color:#dc2626">三层压缩挺有意思：先裁剪，再总结，最后硬折叠。</span> |
+| `corecoder/llm.py` | 和大模型通信。支持 OpenAI 兼容接口，也支持 LiteLLM。 | <span style="color:#ea580c">这里处理了流式输出、工具调用解析、重试、token 统计和费用估算。</span> |
+| `corecoder/prompt.py` | 生成系统提示词。会把当前目录、系统信息、Python 版本、工具列表塞进去。 | <span style="color:#9333ea">提示词不是写死的，会根据运行环境动态生成。</span> |
+| `corecoder/session.py` | 保存、恢复、列出历史会话。 | <span style="color:#0891b2">有 session id 清洗和路径检查，避免乱读乱写。</span> |
+| `corecoder/__init__.py` | 包入口导出。 | <span style="color:#16a34a">方便外部直接导入 `Agent`、`LLM`、`Config`、`ALL_TOOLS`。</span> |
+| `corecoder/__main__.py` | 支持 `python -m corecoder`。 | <span style="color:#475569">很小，但让启动方式更完整。</span> |
 
-### 🧰 Tools 包文件
+### 工具文件
 
-| 文件 | 代码量 | 作用 | 关键设计 |
-|---|---:|---|---|
-| `corecoder/tools/__init__.py` | 26 行 | 工具注册表。集中实例化全部工具，并提供 `get_tool()` 查询函数。 | <span style="color:#059669">Agent 只需要读取 `ALL_TOOLS`，工具扩展点非常直观。</span> |
-| `corecoder/tools/base.py` | 20 行 | 工具抽象基类。规定每个工具必须有 `name`、`description`、`parameters` 和 `execute()`。 | <span style="color:#7c3aed">自动把工具描述转换成 OpenAI function calling schema。</span> |
-| `corecoder/tools/bash.py` | 120 行 | Shell 命令执行工具。用于运行测试、安装依赖、执行 git 操作等。 | <span style="color:#dc2626">内置危险命令拦截、超时控制、stderr 合并、输出截断和线程本地 cwd 追踪。</span> |
-| `corecoder/tools/read.py` | 50 行 | 文件读取工具。带行号读取指定文件，支持 offset 和 limit。 | <span style="color:#2563eb">强制形成“编辑前先读文件”的 Agent 工作习惯，降低误改风险。</span> |
-| `corecoder/tools/write.py` | 36 行 | 文件写入工具。创建新文件或完整覆盖文件内容。 | <span style="color:#ea580c">写入后记录变更文件，配合 CLI 的 `/diff` 命令展示本会话修改过的文件。</span> |
-| `corecoder/tools/edit.py` | 82 行 | 精准编辑工具。通过 `old_string` 到 `new_string` 的唯一匹配替换来修改文件。 | <span style="color:#16a34a">要求旧文本在文件中只出现一次，并返回 unified diff，兼顾安全性与可审计性。</span> |
-| `corecoder/tools/glob_tool.py` | 43 行 | 文件路径匹配工具。支持 `**/*.py` 这类递归 glob。 | <span style="color:#0891b2">按修改时间倒序返回结果，更适合 Agent 优先关注最近活跃文件。</span> |
-| `corecoder/tools/grep.py` | 79 行 | 内容搜索工具。用正则搜索文件内容，返回路径、行号和匹配行。 | <span style="color:#9333ea">自动跳过 `.git`、`node_modules`、虚拟环境、构建产物等噪声目录，并设置匹配上限。</span> |
-| `corecoder/tools/agent.py` | 42 行 | 子 Agent 工具。为复杂子任务创建独立上下文的子 Agent。 | <span style="color:#db2777">子 Agent 继承父 Agent 的 LLM 与工具能力，但移除 `agent` 工具自身，避免无限递归。</span> |
-| `corecoder/tools/now_time.py` | 14 行 | 当前时间工具。返回人类可读的当前日期时间。 | <span style="color:#475569">让模型在需要时间信息时通过工具获取运行时事实，而不是凭上下文猜测。</span> |
-
----
-
-## 🧰 Tools 作用与创新点总览
-
-| Tool 名称 | 主要用途 | 输入参数 | 输出 | 创新点 |
-|---|---|---|---|---|
-| 🖥️ `bash` | 执行终端命令、跑测试、查环境、做 git 操作 | `command`, `timeout` | stdout、stderr、exit code | <span style="color:#dc2626">安全正则拦截危险命令；线程本地 cwd 让并行工具调用时目录状态互不污染；长输出自动截断保护上下文。</span> |
-| 📖 `read_file` | 查看文件内容 | `file_path`, `offset`, `limit` | 带行号的文本 | <span style="color:#2563eb">以行号方式暴露上下文，方便模型做精确引用和后续编辑。</span> |
-| 📝 `write_file` | 新建文件或完整覆盖 | `file_path`, `content` | 写入行数 | <span style="color:#ea580c">自动创建父目录，并把变更写入 `_changed_files`，让会话级变更可追踪。</span> |
-| ✂️ `edit_file` | 小范围精准修改 | `file_path`, `old_string`, `new_string` | 编辑结果和 diff | <span style="color:#16a34a">“唯一匹配才允许修改”的机制，比直接覆盖文件更适合 Agent 安全改代码。</span> |
-| 🔎 `glob` | 按文件名或路径模式找文件 | `pattern`, `path` | 匹配文件列表 | <span style="color:#0891b2">支持递归匹配并按最近修改排序，帮助 Agent 快速定位活跃区域。</span> |
-| 🔍 `grep` | 搜索代码内容 | `pattern`, `path`, `include` | 文件路径、行号、匹配行 | <span style="color:#9333ea">内置噪声目录过滤和结果上限，避免搜索把上下文打爆。</span> |
-| 🤖 `agent` | 派生子 Agent 处理复杂任务 | `task` | 子 Agent 总结结果 | <span style="color:#db2777">用独立上下文隔离探索性任务，父 Agent 只接收压缩后的结论。</span> |
-| ⏰ `now_time` | 获取当前系统时间 | 无 | `YYYY-MM-DD HH:MM:SS` | <span style="color:#475569">把时间这种动态事实交给工具获取，减少模型幻觉。</span> |
+| 文件 | 作用 | 我觉得值得看的点 |
+|---|---|---|
+| `corecoder/tools/__init__.py` | 把所有工具注册到 `ALL_TOOLS`。 | <span style="color:#059669">以后加新工具，基本就在这里挂一下。</span> |
+| `corecoder/tools/base.py` | 工具基类。规定工具要有名字、描述、参数 schema 和执行方法。 | <span style="color:#7c3aed">能自动转成 OpenAI function calling 需要的 schema。</span> |
+| `corecoder/tools/bash.py` | 执行 shell 命令。 | <span style="color:#dc2626">有危险命令拦截、超时、输出截断、cwd 跟踪。</span> |
+| `corecoder/tools/read.py` | 读取文件内容，并带上行号。 | <span style="color:#2563eb">带行号对模型很友好，后面改代码更容易定位。</span> |
+| `corecoder/tools/write.py` | 新建文件或完整覆盖文件。 | <span style="color:#ea580c">写完会记录到 `_changed_files`，可以配合 `/diff` 看改过什么。</span> |
+| `corecoder/tools/edit.py` | 精准替换文件中的一段文本。 | <span style="color:#16a34a">只有 `old_string` 唯一匹配时才改，还会返回 diff。</span> |
+| `corecoder/tools/glob_tool.py` | 根据 glob 模式找文件。 | <span style="color:#0891b2">按修改时间排序，最近动过的文件会靠前。</span> |
+| `corecoder/tools/grep.py` | 用正则搜索文件内容。 | <span style="color:#9333ea">会跳过 `.git`、`node_modules`、虚拟环境、构建目录这些噪声。</span> |
+| `corecoder/tools/agent.py` | 派一个子 Agent 去处理复杂子任务。 | <span style="color:#db2777">子 Agent 有独立上下文，但不会再继续派子 Agent，避免递归套娃。</span> |
+| `corecoder/tools/now_time.py` | 获取当前时间。 | <span style="color:#475569">时间这种会变的信息，还是让工具实时拿比较靠谱。</span> |
 
 ---
 
-## 🧠 Agent 工作流
+## 🧰 Tools 作用和创新点
+
+| Tool | 它能干嘛 | 创新点 / 小心思 |
+|---|---|---|
+| 🖥️ `bash` | 跑命令、跑测试、看环境、做 git 操作。 | <span style="color:#dc2626">不是无脑执行：先检查危险命令，执行时有 timeout，输出太长也会截断。</span> |
+| 📖 `read_file` | 读文件。 | <span style="color:#2563eb">输出自带行号，适合模型按位置理解代码。</span> |
+| 📝 `write_file` | 写新文件或重写整个文件。 | <span style="color:#ea580c">会自动创建父目录，也会记录这个文件被改过。</span> |
+| ✂️ `edit_file` | 对已有文件做小范围替换。 | <span style="color:#16a34a">要求旧文本只出现一次，这样不容易误伤别的地方。</span> |
+| 🔎 `glob` | 按文件名规则找文件。 | <span style="color:#0891b2">支持 `**/*.py` 这种递归匹配，还会优先显示最近修改的文件。</span> |
+| 🔍 `grep` | 搜代码里的内容。 | <span style="color:#9333ea">带目录过滤和结果上限，避免搜出一大堆没用内容。</span> |
+| 🤖 `agent` | 让子 Agent 单独处理一个任务。 | <span style="color:#db2777">适合把“先调查一下代码结构”这种任务隔离出去，主对话不会被塞爆。</span> |
+| ⏰ `now_time` | 获取当前系统时间。 | <span style="color:#475569">让模型别猜时间，直接查。</span> |
+
+---
+
+## 🧠 它的核心流程
+
+我理解下来，CoreCoder 的主流程其实就是这个：
 
 ```text
-用户输入
+用户说一句话
   ↓
-Agent.chat()
+把系统提示词 + 历史对话交给 LLM
   ↓
-拼接 system prompt + 历史消息
-  ↓
-LLM 流式响应
-  ↓
-是否包含 tool_calls？
-  ├─ 否：返回最终回答
-  └─ 是：执行工具，将结果写回 messages，再继续询问 LLM
+LLM 判断：要不要调用工具？
+  ├─ 不需要：直接回答
+  └─ 需要：执行工具，把结果放回对话，再问 LLM
 ```
 
-这个循环是 CoreCoder 的核心。它的关键不在复杂框架，而在几个边界处理：
+看起来简单，但真正能跑起来，靠的是这些细节：
 
-| 边界 | 处理方式 |
+| 细节 | 作用 |
 |---|---|
-| 工具参数错误 | 使用 `inspect.signature(...).bind()` 在执行前校验 |
-| 多工具调用 | 使用 `ThreadPoolExecutor(max_workers=8)` 并发执行 |
-| 中断执行 | 为未完成的 tool call 补 `[interrupted]`，保持消息协议完整 |
-| 上下文过长 | 每轮前后都调用 `ContextManager.maybe_compress()` |
-| 工具不存在 | 返回结构化错误，让模型有机会自我修正 |
+| 工具参数先校验 | 模型传错参数时，不至于直接崩 |
+| 多个工具并发执行 | 模型一次调多个工具时更快 |
+| 每轮都检查上下文 | 对话长了自动压缩 |
+| 工具结果回填 messages | 让模型知道刚才工具执行了什么 |
+| 最大轮数限制 | 防止模型一直调工具停不下来 |
 
 ---
 
-## 🪟 上下文压缩机制
+## 🪟 上下文压缩
 
-`corecoder/context.py` 采用三层策略，尽量在保留任务状态的同时减少 token 消耗：
+`context.py` 这一块我觉得挺值得看。它不是等爆了才处理，而是分阶段压缩：
 
-| 层级 | 触发阈值 | 策略 | 适合处理 |
-|---|---:|---|---|
-| 1️⃣ Tool Snip | 50% | 裁剪超长工具输出，只保留前 3 行和后 3 行 | 测试日志、搜索结果、命令输出 |
-| 2️⃣ Summarize | 70% | 调用 LLM 总结旧对话，保留最近 8 条消息 | 长任务、多轮修改 |
-| 3️⃣ Hard Collapse | 90% | 最后手段，只保留摘要和最近消息 | 极限上下文压力 |
+| 阶段 | 触发点 | 怎么处理 |
+|---|---:|---|
+| 1️⃣ 裁剪工具输出 | 约 50% 上下文 | 长日志只留开头和结尾 |
+| 2️⃣ 总结旧对话 | 约 70% 上下文 | 用 LLM 总结旧内容，保留最近几条 |
+| 3️⃣ 硬折叠 | 约 90% 上下文 | 只保留摘要和最近消息 |
 
-此外，`_safe_split()` 会避免把 assistant 的 tool call 和对应 tool result 拆散，防止发送给模型的消息序列非法。
+还有一个细节：它会尽量避免把 tool call 和 tool result 拆开。  
+不然模型接口可能会觉得消息格式不合法。
 
 ---
 
-## 💬 CLI 命令
+## 💬 终端里能用的命令
 
-| 命令 | 作用 |
+| 命令 | 用途 |
 |---|---|
-| `/help` | 查看帮助 |
-| `/reset` | 清空当前对话历史 |
+| `/help` | 看帮助 |
+| `/reset` | 清空当前对话 |
 | `/model` | 查看当前模型 |
-| `/model <name>` | 会话中切换模型 |
-| `/tokens` | 查看 prompt / completion token 用量与估算费用 |
-| `/compact` | 手动触发上下文压缩 |
-| `/diff` | 查看本会话被工具修改过的文件 |
-| `/save` | 保存当前会话 |
-| `/sessions` | 列出最近保存的会话 |
+| `/model <name>` | 临时切换模型 |
+| `/tokens` | 看 token 用量和估算费用 |
+| `/compact` | 手动压缩上下文 |
+| `/diff` | 看这次会话改过哪些文件 |
+| `/save` | 保存会话 |
+| `/sessions` | 查看保存过的会话 |
 | `quit` / `exit` | 退出 |
 
 ---
 
-## 🔐 安全设计亮点
+## 🔐 我比较喜欢的安全设计
 
-| 位置 | 安全措施 | 意义 |
+| 位置 | 做了什么 | 为什么有用 |
 |---|---|---|
-| `tools/bash.py` | 拦截 `rm -rf`、`mkfs`、`dd of=/dev/...`、`curl | sh` 等危险模式 | 降低 Agent 执行破坏性命令的风险 |
-| `tools/edit.py` | `old_string` 必须唯一匹配 | 避免错误替换多个位置 |
-| `tools/edit.py` | 返回 unified diff | 修改过程可审计 |
-| `session.py` | session id 规范化 + parent 路径校验 | 防止路径穿越 |
-| `context.py` | 工具调用消息安全切分 | 避免破坏 LLM 工具调用协议 |
-| `agent.py` | 最大轮数 `max_rounds` | 防止无限工具调用循环 |
+| `bash.py` | 拦截一些明显危险命令 | 防止模型误执行破坏性操作 |
+| `edit.py` | 旧文本必须唯一匹配 | 避免一改改一片 |
+| `edit.py` | 返回 diff | 改了什么一眼能看到 |
+| `session.py` | 清洗 session id | 避免路径穿越 |
+| `agent.py` | 限制最大工具调用轮数 | 防止无限循环 |
+| `context.py` | 安全切分消息 | 防止 tool call/result 对不上 |
 
 ---
 
-## 🌈 项目亮点
+## 🌱 后面可以继续折腾的方向
 
-| 亮点 | 说明 |
+| 想法 | 可以改哪里 |
 |---|---|
-| 🧱 极简架构 | 没有重型框架，核心逻辑直接可读 |
-| 🔌 模型可替换 | OpenAI 兼容接口 + LiteLLM 后端 |
-| 🧰 工具可扩展 | 新工具只需继承 `Tool` 并加入 `ALL_TOOLS` |
-| 🧠 上下文可续航 | 三层压缩让长任务更稳 |
-| 🧾 修改可追踪 | 写入和编辑工具共享 `_changed_files` |
-| 🤖 支持子 Agent | 复杂任务可拆给独立上下文处理 |
-| 💸 成本可观察 | LLM 层统计 token，并按内置价格表估算费用 |
+| 加一个真正的权限确认机制 | `tools/bash.py`、`tools/write.py`、`tools/edit.py` |
+| 给工具加更细的沙箱 | `tools/base.py` 和各个工具 |
+| 做一个 Web UI | 新增前端，复用 `Agent` |
+| 增加项目索引能力 | 新增 indexing / retrieval 工具 |
+| 把上下文压缩做得更聪明 | `context.py` |
+| 加插件式工具加载 | `tools/__init__.py` |
 
 ---
 
-## 🛠️ 如何扩展一个新工具
-
-1. 在 `corecoder/tools/` 下新建一个工具文件。
-2. 继承 `Tool`。
-3. 声明 `name`、`description`、`parameters`。
-4. 实现 `execute()`。
-5. 在 `corecoder/tools/__init__.py` 的 `ALL_TOOLS` 中注册。
-
-示例骨架：
-
-```python
-from .base import Tool
-
-
-class MyTool(Tool):
-    name = "my_tool"
-    description = "Describe what this tool does."
-    parameters = {
-        "type": "object",
-        "properties": {
-            "text": {"type": "string", "description": "Input text"},
-        },
-        "required": ["text"],
-    }
-
-    def execute(self, text: str) -> str:
-        return text.upper()
-```
-
----
-
-## 📌 适合谁阅读
-
-| 读者 | 收获 |
-|---|---|
-| 想学习 Agent 原理的人 | 看清 coding agent 的主循环、工具协议和上下文管理 |
-| 想改造自己的 CLI Agent 的开发者 | 直接复用配置、LLM、工具注册、会话管理等模式 |
-| 想研究工具调用安全边界的人 | 观察 bash、edit、session 等模块的防护策略 |
-| 想做教学项目的人 | 文件短、职责清晰，适合逐文件讲解 |
-
----
-
-## 📄 License
-
-MIT License
+## 🧪 一句话总结
 
 <div align="center">
 
-<strong>CoreCoder = 小而完整的 Agent 内核。</strong><br>
-<span style="color:#2563eb">读懂它，然后 fork 出你自己的编程助手。</span>
+<strong>CoreCoder 对我来说不是一个“包装好的成品”，而是一个能拆、能跑、能改的 Agent 学习底座。</strong><br>
+<span style="color:#2563eb">越读越能感觉到：coding agent 的核心并不神秘，难的是把每个边界处理稳。</span>
 
 </div>
